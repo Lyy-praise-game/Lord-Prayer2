@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>主禱文逐句砌圖（拖曳排序）</title>
+<style>
+  :root {
+    --bg: #fff5f0;
+    --card: #ffffff;
+    --primary: #ff6b35;
+    --primary-dark: #e85d04;
+    --text: #2d3436;
+    --correct: #00b894;
+    --drag: #ffeaa7;
+    --placeholder: #fdcb6e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: linear-gradient(180deg, #87CEEB 0%, #B0E0E6 40%, #E0F6FF 100%);
+    background-image: 
+      radial-gradient(ellipse 90px 45px at 10% 15%, rgba(255,255,255,0.95) 0%, transparent 70%),
+      radial-gradient(ellipse 110px 55px at 65% 12%, rgba(255,255,255,0.9) 0%, transparent 70%),
+      radial-gradient(ellipse 70px 35px at 35% 25%, rgba(255,255,255,0.85) 0%, transparent 70%),
+      radial-gradient(ellipse 100px 50px at 80% 28%, rgba(255,255,255,0.8) 0%, transparent 70%),
+      radial-gradient(ellipse 60px 30px at 20% 40%, rgba(255,255,255,0.75) 0%, transparent 70%),
+      radial-gradient(ellipse 85px 40px at 55% 45%, rgba(255,255,255,0.7) 0%, transparent 70%),
+      radial-gradient(ellipse 75px 38px at 90% 50%, rgba(255,255,255,0.8) 0%, transparent 70%),
+      linear-gradient(180deg, #87CEEB 0%, #B0E0E6 40%, #E0F6FF 100%);
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    top: 18%;
+    left: -10%;
+    width: 120%;
+    height: 80px;
+    background: linear-gradient(90deg, 
+      transparent 0%, 
+      #ff0000 10%, 
+      #ff7f00 20%, 
+      #ffff00 30%, 
+      #00ff00 40%, 
+      #0000ff 50%, 
+      #4b0082 60%, 
+      #9400d3 70%, 
+      transparent 80%);
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    opacity: 0.65;
+    pointer-events: none;
+    z-index: -1;
+    filter: blur(1px);
+  }
+  body {
+    color: var(--text);
+    min-height: 100vh;
+    padding: 4px;
+    padding-bottom: 55px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  h1 {
+    font-size: 1.55rem;
+    margin: 0 0 2px;
+    color: var(--primary-dark);
+    font-weight: 800;
+  }
+  .subtitle {
+    font-size: 1rem;
+    color: #555;
+  }
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: relative;
+  }
+  .item {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 6px 8px 6px 32px;
+    font-size: 1.25rem;
+    line-height: 1.3;
+    text-align: left;
+    font-weight: 700;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    user-select: none;
+    touch-action: none;
+    border: 2px solid transparent;
+    position: relative;
+    transition: background 0.15s, border-color 0.15s, transform 0.12s ease-out;
+  }
+  .item.placeholder {
+    background: var(--placeholder);
+    border: 2px dashed #e17055;
+    box-shadow: none;
+    opacity: 0.85;
+  }
+  .item.dragging {
+    opacity: 0.35;
+  }
+  .item.correct {
+    border-color: var(--correct);
+    background: #d4f8e8;
+    animation: correctPulse 0.4s ease;
+  }
+  .item.correct::after {
+    content: '🐑';
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.95rem;
+    animation: sheepPop 0.4s ease;
+  }
+  @keyframes sheepPop {
+    0% { transform: translateY(-50%) scale(0); }
+    70% { transform: translateY(-50%) scale(1.3); }
+    100% { transform: translateY(-50%) scale(1); }
+  }
+  @keyframes correctPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.03); }
+    100% { transform: scale(1); }
+  }
+  .item .handle {
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #bbb;
+    font-size: 1.2rem;
+    pointer-events: none;
+  }
+  .ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.95;
+    transform: scale(1.02);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 6px 8px 6px 32px;
+    font-size: 1.25rem;
+    line-height: 1.3;
+    text-align: left;
+    font-weight: 700;
+    border: 2px solid var(--primary);
+  }
+  .controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(8px);
+    padding: 12px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+  }
+  button {
+    flex: 1;
+    max-width: 120px;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-check {
+    background: linear-gradient(135deg, #ff6b35, #ff9f43);
+    color: white;
+  }
+  .btn-reset {
+    background: #dfe6e9;
+    color: #2d3436;
+  }
+  .message {
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 4px 0;
+    min-height: 1em;
+    color: var(--correct);
+  }
+  .message.success {
+    animation: popIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+  @keyframes popIn {
+    0% { transform: scale(0.3) rotate(-5deg); opacity: 0; }
+    60% { transform: scale(1.15) rotate(2deg); }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  .confetti {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    overflow: hidden;
+  }
+  .smoke {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9998;
+    overflow: hidden;
+  }
+  .smoke span {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background: radial-gradient(circle, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 70%);
+    border-radius: 50%;
+    animation: smokeRise linear forwards;
+    opacity: 0.7;
+  }
+  @keyframes smokeRise {
+    0% { transform: translateY(0) scale(0.5); opacity: 0.8; }
+    100% { transform: translateY(-80vh) scale(2.5); opacity: 0; }
+  }
+  .confetti span {
+    position: absolute;
+    background: #ff6b35;
+    animation: fall linear forwards;
+  }
+  @keyframes fall {
+    0% { transform: translateY(-30px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(120vh) rotate(1440deg); opacity: 0; }
+  }
+  .item.celebrate {
+    animation: bounce 0.8s ease, glow 1.5s ease infinite;
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    25% { transform: translateY(-12px); }
+    50% { transform: translateY(4px); }
+    75% { transform: translateY(-6px); }
+  }
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 0 0 rgba(0,184,148,0); }
+    50% { box-shadow: 0 0 20px rgba(0,184,148,0.5); }
+  }
+  @media (min-width: 480px) {
+    body { max-width: 420px; margin: 0 auto; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>主禱文逐句砌圖</h1>
+  <div class="subtitle">按住句子拖曳調整順序，放下後自動檢查</div>
+</header>
+
+<div class="message" id="message"></div>
+
+<div class="list" id="list"></div>
+
+<div class="controls">
+  <button class="btn-check" onclick="checkOrder()">檢查</button>
+  <button class="btn-reset" onclick="resetGame()">重新開始</button>
+</div>
+
+<script>
+const correctOrder = [
+  "我們在天上的父：",
+  "願人都尊你的名為聖。",
+  "願你的國降臨；",
+  "願你的旨意行在地上，",
+  "如同行在天上。",
+  "我們日用的飲食，",
+  "今日賜給我們。",
+  "免我們的債，",
+  "如同我們免了人的債。",
+  "不叫我們遇見試探；",
+  "救我們脫離兇惡。",
+  "因為國度、權柄、榮耀，全是你的，直到永遠。阿們。"
+];
+
+let dragState = null;
+
+function vibrate(pattern) {
+  if (navigator.vibrate) {
+    navigator.vibrate(pattern);
+  }
+}
+
+function shuffle(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function init() {
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  const msg = document.getElementById('message');
+  msg.textContent = '';
+  msg.classList.remove('success');
+
+  const shuffled = shuffle(correctOrder);
+  shuffled.forEach(text => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.dataset.text = text;
+    div.innerHTML = `<span class="handle">☰</span>${text}`;
+    div.addEventListener('pointerdown', startDrag);
+    list.appendChild(div);
+  });
+}
+
+function startDrag(e) {
+  if (e.button && e.button !== 0) return;
+  e.preventDefault();
+
+  const item = e.currentTarget;
+  const list = document.getElementById('list');
+  const rect = item.getBoundingClientRect();
+
+  // Create placeholder
+  const placeholder = document.createElement('div');
+  placeholder.className = 'item placeholder';
+  placeholder.style.height = rect.height + 'px';
+  placeholder.dataset.text = item.dataset.text;
+  list.insertBefore(placeholder, item);
+
+  // Create ghost
+  const ghost = document.createElement('div');
+  ghost.className = 'ghost';
+  ghost.innerHTML = item.innerHTML;
+  ghost.style.width = rect.width + 'px';
+  ghost.style.left = rect.left + 'px';
+  ghost.style.top = (e.clientY - (e.clientY - rect.top)) + 'px';
+  document.body.appendChild(ghost);
+
+  item.classList.add('dragging');
+  item.style.display = 'none'; // hide original while dragging
+
+  vibrate(10); // 輕微振動：開始拖曳
+
+  dragState = {
+    item,
+    ghost,
+    placeholder,
+    list,
+    offsetY: e.clientY - rect.top,
+    startY: e.clientY
+  };
+
+  document.addEventListener('pointermove', onDrag, { passive: false });
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+}
+
+function onDrag(e) {
+  if (!dragState) return;
+  e.preventDefault();
+
+  const { ghost, offsetY, placeholder, list, item } = dragState;
+  const y = e.clientY - offsetY;
+  ghost.style.top = y + 'px';
+  ghost.style.left = (list.getBoundingClientRect().left) + 'px';
+
+  // Find insertion point
+  const items = [...list.children].filter(el => el !== item && el !== placeholder);
+  let insertBefore = null;
+
+  for (const sib of items) {
+    const r = sib.getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    if (e.clientY < mid) {
+      insertBefore = sib;
+      break;
+    }
+  }
+
+  if (insertBefore) {
+    if (placeholder.nextSibling !== insertBefore) {
+      list.insertBefore(placeholder, insertBefore);
+      vibrate(5); // 極輕振動：位置移動
+    }
+  } else {
+    if (placeholder !== list.lastElementChild) {
+      list.appendChild(placeholder);
+      vibrate(5);
+    }
+  }
+}
+
+function endDrag(e) {
+  if (!dragState) return;
+  const { item, ghost, placeholder, list } = dragState;
+
+  // Place item at placeholder position
+  list.insertBefore(item, placeholder);
+  placeholder.remove();
+
+  item.style.display = '';
+  item.classList.remove('dragging');
+
+  if (ghost && ghost.parentNode) ghost.remove();
+
+  vibrate(15); // 放下時的微振動
+
+  dragState = null;
+
+  document.removeEventListener('pointermove', onDrag);
+  document.removeEventListener('pointerup', endDrag);
+  document.removeEventListener('pointercancel', endDrag);
+
+  // 自動檢查
+  autoCheck();
+}
+
+function autoCheck() {
+  const list = document.getElementById('list');
+  const current = [...list.children].map(el => el.dataset.text);
+  let allCorrect = true;
+
+  current.forEach((text, i) => {
+    const el = list.children[i];
+    if (text === correctOrder[i]) {
+      el.classList.add('correct');
+    } else {
+      el.classList.remove('correct');
+      allCorrect = false;
+    }
+  });
+
+  const msg = document.getElementById('message');
+  if (allCorrect) {
+    // 顯示完整正確答案 + 動畫
+    const fullText = correctOrder.map((s, i) => `${i + 1}. ${s}`).join('<br>');
+    msg.innerHTML = `完成！阿們 🙏<br><br><div style="font-size:1rem;line-height:1.4;text-align:left;background:#fff;padding:6px;border-radius:8px;margin-top:4px;font-weight:700;">${fullText}</div>`;
+    msg.classList.add('success');
+    vibrate([30, 50, 30]);
+
+    // 鎖定列表
+    list.querySelectorAll('.item').forEach(el => {
+      el.style.pointerEvents = 'none';
+      el.classList.add('correct', 'celebrate');
+    });
+
+    // 灑紙屑 + 煙霧
+    createConfetti();
+    createSmoke();
+  } else {
+    msg.textContent = '';
+    msg.classList.remove('success');
+  }
+}
+
+function createSmoke() {
+  const container = document.createElement('div');
+  container.className = 'smoke';
+  document.body.appendChild(container);
+
+  for (let i = 0; i < 40; i++) {
+    const span = document.createElement('span');
+    span.style.left = Math.random() * 100 + 'vw';
+    span.style.bottom = '-20px';
+    span.style.animationDuration = (2 + Math.random() * 2) + 's';
+    span.style.animationDelay = Math.random() * 1.5 + 's';
+    const size = 30 + Math.random() * 50;
+    span.style.width = size + 'px';
+    span.style.height = size + 'px';
+    container.appendChild(span);
+  }
+
+  setTimeout(() => container.remove(), 4500);
+}
+
+function createConfetti() {
+  const container = document.createElement('div');
+  container.className = 'confetti';
+  document.body.appendChild(container);
+
+  const colors = ['#ff6b35', '#00b894', '#e17055', '#0984e3', '#a29bfe', '#fdcb6e', '#fd79a8', '#ffeaa7', '#55efc4'];
+  const shapes = ['50%', '2px', '0']; // circle, square, rectangle
+
+  for (let i = 0; i < 150; i++) {
+    const span = document.createElement('span');
+    span.style.left = Math.random() * 100 + 'vw';
+    span.style.background = colors[Math.floor(Math.random() * colors.length)];
+    span.style.animationDuration = (1.2 + Math.random() * 2.5) + 's';
+    span.style.animationDelay = Math.random() * 0.8 + 's';
+    const size = (5 + Math.random() * 10);
+    span.style.width = size + 'px';
+    span.style.height = size + 'px';
+    span.style.borderRadius = shapes[Math.floor(Math.random() * shapes.length)];
+    container.appendChild(span);
+  }
+
+  setTimeout(() => container.remove(), 4000);
+}
+
+function checkOrder() {
+  autoCheck();
+  const msg = document.getElementById('message');
+  if (!msg.innerHTML.includes('完成')) {
+    if (!msg.textContent) {
+      msg.textContent = '還沒完全正確，再調整看看';
+      vibrate(20);
+      setTimeout(() => { if (msg.textContent.includes('還沒')) msg.textContent = ''; }, 1500);
+    }
+  }
+}
+
+function resetGame() {
+  init();
+}
+
+init();
+</script>
+</body>
+</html>
